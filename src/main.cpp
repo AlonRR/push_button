@@ -21,7 +21,7 @@ struct loop_time_t
     update_now();
     difference = now - last_click;
   }
-} loop_time {0, 0, 0};
+} loop_time{0, 0, 0};
 
 struct io_state_t
 {
@@ -46,23 +46,24 @@ struct io_state_t
   {
     button23 = digitalRead(23);
   }
-  bool has_button_changed()
-  {
-    return button23 != button23_last;
-  }
   void reset_button23_last()
   {
     button23_last = button23;
   }
   void repeater21()
   {
-    if (count_blinks == 0 || count_blinks == 1)
+    if (count_blinks == 0)
       return;
+    if (count_blinks == 1)
+    {
+      change_light21();
+      reset_count_blinks();
+      return;
+    }
     if (light21 == HIGH) // if light is on, turn off, delay and adjust for uneven count
     {
       count_blinks--;
-      light21 = LOW;
-      digitalWrite(21, LOW);
+      change_light21();
       delay(1000);
     }
     for (size_t i = 0; i < count_blinks; i++)
@@ -74,12 +75,12 @@ struct io_state_t
     printf("Repeater21 complete\n");
     reset_count_blinks();
   }
-} io_state = {LOW, LOW, LOW, 0};
+} io_state{LOW, LOW, LOW, 0};
 
 void check_button23()
 {
   io_state.get_button23_read();
-  if (!io_state.has_button_changed())
+  if (io_state.button23 == io_state.button23_last)
     return;
   io_state.reset_button23_last();
   io_state.change_light21();
@@ -106,7 +107,7 @@ void setup()
 void loop()
 {
   loop_time.update();
-  if (loop_time.difference > BUTTON_DEBOUNCE)
+  if (loop_time.difference < BUTTON_DEBOUNCE)
     return;
   check_button23();
   if (loop_time.difference > 5000)
