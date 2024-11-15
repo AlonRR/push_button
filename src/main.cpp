@@ -2,34 +2,92 @@
 
 #define BUTTON_DEBOUNCE 50
 
-struct input23_s
+struct loop_time_t
 {
-  bool state;
-  bool last_state;
-  unsigned long current_time;
-  unsigned long last_time;
-  unsigned long debounce_time;
+  unsigned long now;
+  unsigned long last_click;
+  unsigned long difference;
+  void update_now()
+  {
+    now = millis();
+  }
+  void reset_last()
+  {
+    last_click = now;
+    difference = 0;
+  }
+  void update()
+  {
+    update_now();
+    difference = now - last_click;
+  }
+} loop_time {0, 0, 0};
+
+struct io_state_t
+{
+  bool light21;
+  bool button23;
+  bool button23_last;
   int count_blinks;
-} input23{false, false, 0, 0, 0, 0};
+  void change_light21()
+  {
+    light21 = !light21;
+    digitalWrite(21, light21);
+  }
+  void add_count_blinks()
+  {
+    count_blinks++;
+  }
+  void reset_count_blinks()
+  {
+    count_blinks = 0;
+  }
+  void get_button23_read()
+  {
+    button23 = digitalRead(23);
+  }
+  bool has_button_changed()
+  {
+    return button23 != button23_last;
+  }
+  void reset_button23_last()
+  {
+    button23_last = button23;
+  }
+  void repeater21()
+  {
+    if (count_blinks == 0 || count_blinks == 1)
+      return;
+    if (light21 == HIGH) // if light is on, turn off, delay and adjust for uneven count
+    {
+      count_blinks--;
+      light21 = LOW;
+      digitalWrite(21, LOW);
+      delay(1000);
+    }
+    for (size_t i = 0; i < count_blinks; i++)
+    {
+      change_light21();
+      delay(250);
+    }
+    printf("light21: %d, count_blinks: %d\n", light21, count_blinks);
+    printf("Repeater21 complete\n");
+    reset_count_blinks();
+  }
+} io_state = {LOW, LOW, LOW, 0};
 
-struct output21_s
+void check_button23()
 {
-  bool state;
-  unsigned long last_change_time;
-  unsigned long change_delay;
-} output21{false, 0, 0};
-
-struct phase_s
-{
-  bool state23;
-  bool repeater21;
-} phase{false, false};
-
-// put function declarations here:
-void change_state21();
-void track_change23();
-void monitor_pulse21();
-void repeat_pulses21();
+  io_state.get_button23_read();
+  if (!io_state.has_button_changed())
+    return;
+  io_state.reset_button23_last();
+  io_state.change_light21();
+  if (loop_time.difference > 1000)
+    io_state.reset_count_blinks();
+  io_state.add_count_blinks();
+  loop_time.reset_last();
+}
 
 void setup()
 {
@@ -37,84 +95,20 @@ void setup()
   pinMode(LED_BUILTIN, OUTPUT);
   pinMode(21, OUTPUT);
   pinMode(23, INPUT);
-  input23.count_blinks = 0;
   digitalWrite(21, LOW);
-  input23.state = digitalRead(23);
-  input23.last_state = input23.state;
-  input23.last_time = millis();
-
+  io_state.light21 = LOW;
+  io_state.button23 = digitalRead(23);
+  loop_time.update_now();
+  loop_time.reset_last();
   printf("Setup complete\n");
 }
 
 void loop()
 {
-  // delay(1000);
-  if (phase.repeater21 == true)
-    repeat_pulses21();
-  track_change23();
-  if (phase.state23 == false)
+  loop_time.update();
+  if (loop_time.difference > BUTTON_DEBOUNCE)
     return;
-  change_state21();
-  monitor_pulse21();
-}
-
-// toggle switch for output 21
-void change_state21()
-{
-  static int state = LOW;
-  digitalWrite(21, state);
-  state = !state;
-}
-
-// tracks the operation of input 23; returns true for change
-void track_change23()
-{
-  unsigned long current_time = millis();
-  bool current_state = (bool)digitalRead(23);
-  if (input23.state == current_state)
-    return;
-  if (input23.last_time + BUTTON_DEBOUNCE >= current_time)
-    return;
-  Serial.println(current_time);
-  input23.state = current_state;
-  input23.debounce_time = current_time - input23.last_time;
-  input23.last_time = current_time;
-  phase.state23 = true;
-  return;
-}
-
-// monitors the on, off, and time of the switch
-void monitor_pulse21()
-{
-  phase.state23 = false;
-  printf("Monitor pulse: %d\n", input23.debounce_time);
-  if (output21.state != LOW)
-    return;
-  if (input23.debounce_time > 1000)
-  {
-    input23.count_blinks = 0;
-    return;
-  }
-  input23.count_blinks++;
-}
-
-// runs a full pulse on -> delay -> off
-void repeat_pulses21()
-{
-  if (input23.count_blinks == 0)
-    return;
-  if (input23.state == HIGH)
-  {
-    digitalWrite(21, LOW);
-    delay(1000);
-  }
-  for (size_t i = 0; i < input23.count_blinks; i++)
-  {
-    change_state21();
-    delay(1000);
-  }
-  if (input23.state == HIGH)
-    digitalWrite(21, HIGH);
-  phase.repeater21 = false;
-  input23.count_blinks = 0;
+  check_button23();
+  if (loop_time.difference > 5000)
+    io_state.repeater21();
 }
