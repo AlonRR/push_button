@@ -71,8 +71,6 @@ struct io_state_t
       change_light21();
       delay(250);
     }
-    printf("light21: %d, count_blinks: %d\n", light21, count_blinks);
-    printf("Repeater21 complete\n");
     reset_count_blinks();
   }
 } io_state{LOW, LOW, LOW, 0};
@@ -101,7 +99,6 @@ void setup()
   io_state.button23 = digitalRead(23);
   loop_time.update_now();
   loop_time.reset_last();
-  printf("Setup complete\n");
 }
 
 void loop()
